@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "scripts": {
+    "test": "mocha"
+  },
+  "devDependencies": {
+    "mocha": "2.5.3",
+    "should": "9.0.1"
+  }
+}
