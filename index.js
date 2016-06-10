@@ -11,14 +11,19 @@ const REDO = {}
 const UNDO = {}
 let HISTORY_COUNTER = 0
 
+// @todo a..zA..Z..0..99
+// const alph = 'abcde'.split('')
+const uniqID = new function() {
+	let id = +new Date
+	return () => id++
+}
 
-
-// 
+//
 let eventStore = {}
 function Event(){}
 
 Event.prototype	= {
-	
+
 	e(){
 		const e = this._e;
 		return eventStore[e] || (eventStore[e] = {})
@@ -56,10 +61,10 @@ Event.prototype	= {
 }
 
 
-// 
+//
 const nextPatches = []
 
-// 
+//
 function addPatch(path, type, item) {
 	nextPatches.push(createPatch(path, type, item))
 }
@@ -91,7 +96,7 @@ function createRollback(path, type, item) {
 	}
 }
 
-// @todo 
+// @todo
 // perf test .shift vs iterator + .length = 0
 // perf test setTimeout vs reqanimframe?
 function applyPatches( recursive ){
@@ -107,13 +112,6 @@ function emitChanges(path, type, item){
 		path.pop()
 	}
 
-}
-
-// @todo a..zA..Z..0..99
-// const alph = 'abcde'.split('')
-let _uniqID = 0
-function uniqID(){
-	return ++_uniqID
 }
 
 function createObj( obj, path ) {
@@ -165,7 +163,7 @@ function selectByPath( _path ) {
 
 	const path = parsePath(_path)
 	let result = tree
-	
+
 	path.forEach(p => {
 		typeof p !== 'function'
 			? result = result[p]
