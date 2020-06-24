@@ -97,6 +97,10 @@ function watch(pattern, type = 'change', callback) {
 // 
 // 
 function on(path, type = 'change', callback) {
+  if(typeof type === 'function') {
+    callback = type
+    type = 'change'
+  }
   path = parsePath(path)
   const id = getOrCreateIdByPath(path)
   const selector = getOrCreateSelectorById(id)
@@ -116,8 +120,13 @@ function on(path, type = 'change', callback) {
 }
 
 function once(path, type, callback) {
-  const off = on(path, type, () => {
-    callback()
+  if (typeof type === 'function') {
+    callback = type
+    type = 'change'
+  }
+  const off = on(path, type, (e) => {
+    console.log("ONE!!!!")
+    callback(e)
     off()
   })
 }
