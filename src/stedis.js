@@ -2,6 +2,21 @@ const isDev = process.env.NODE_ENV !== "production"
 
 const PATH_SEPARATOR = '/'
 
+const 
+  
+  ERROR_ONLY_OBJECT_METHOD = isDev ? `
+
+  ` : 'ERROR_ONLY_OBJECT_METHOD',
+  
+  ERROR_ONLY_COLLECTION_METHOD = isDev ? `
+
+  ` : 'ERROR_ONLY_COLLECTION_METHOD =',
+
+  ERROR_MERGE_BEFORE_SET = isDev ? `
+    
+  ` : 'ERROR_MERGE_BEFORE_SET'
+
+
 
 // 
 const virtualTree = new Map
@@ -125,7 +140,6 @@ function once(path, type, callback) {
     type = 'change'
   }
   const off = on(path, type, (e) => {
-    console.log("ONE!!!!")
     callback(e)
     off()
   })
@@ -316,7 +330,7 @@ function set(path, value) {
   const selector = getSelector([...path])
 
   objectNeverWasUsed.delete(selector)
-  Object.assign(selector, value)
+  assign(selector, value)
 
   setOrUpdateCollection([...path], selector)
   
@@ -325,6 +339,27 @@ function set(path, value) {
 }
 
 
+// 
+// 
+// 
+function merge(path, value) {
+  path = parsePath(path)
+  if (path.length % 2 === 0) {
+    throw new Error(`merge() method allowed only on objects, not collections. Check your path`)
+  }
+
+  const selector = getSelector([...path])
+  
+  if (objectNeverWasUsed.has(selector)) {
+    throw new Error(`merge() method allowed only on objects, not collections. Check your path`)
+  }
+
+  assign(selector, value)
+  
+  emit([...path], 'change', value)
+  emitGlobalPathEvents([...path], 'change', value)
+
+}
 
 // 
 // 
@@ -444,6 +479,10 @@ function clone(o) {
   return JSON.parse(JSON.stringify(o))
 }
 
+function assign(source, value) {
+  Object.assign(source, value)
+}
+
 function objectMethod(...args) {
   const [path] = args
   path = parsePath(path)
@@ -454,11 +493,18 @@ function objectMethod(...args) {
 }
 
 
+const __internal__for__debug__purpose__only__ = { 
+  pathToIdsMap, 
+  virtualTree 
+}
+
 export {
-  set, get, on, once, emit, watch,
+  set, merge, 
+  get, 
+  on, once, emit, watch,
   getNested,
 
-  pathToIdsMap, virtualTree
+  __internal__for__debug__purpose__only__
 }
 
 
