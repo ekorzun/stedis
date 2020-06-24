@@ -1,0 +1,15 @@
+{
+  "name": "stedis",
+  "version": "0.0.1",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "dev": "parcel serve index.html"
+  },
+  "dependencies": {
+    "nodemon": "^2.0.4",
+    "parcel-bundler": "^1.12.4",
+    "react": "^16.13.1",
+    "react-dom": "^16.13.1"
+  }
+}
