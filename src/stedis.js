@@ -1,4 +1,4 @@
-const isDev = false // process.env.NODE_ENV !== 'production'
+const isDev = process.env.NODE_ENV !== 'production'
 
 const PATH_SEPARATOR = '/'
 
@@ -260,11 +260,16 @@ export function once(path, type, callback) {
 export function computed(path, from, toValue) {
   const unsubscribe = []
   const setValue = () => {
-    set(path, toValue(from.map(get)))
+    set(path, toValue(from.map(f => get(f))))
   }
   from.forEach((path) => {
     unsubscribe.push(on(path, setValue))
   })
+  
+  try {
+    setValue()
+  } catch (e) {}
+
   return () => unsubscribe.forEach(u => u())
 }
 

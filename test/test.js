@@ -83,10 +83,12 @@ test('vse', () => {
 
 
 test('primitives', () => {
-  set('/primitives/1', 1)
-  expect(get('/primitives/1')).toStrictEqual(1)
   set('/primitives/1', '1')
   expect(get('/primitives/1')).toStrictEqual('1')
+  set('/primitives/1', 1)
+  expect(get('/primitives/1')).toStrictEqual(1)
+  set('/primitives/2', 2)
+  expect(get('/primitives/2')).toStrictEqual(2)
   set('/primitives/true', true)
   expect(get('/primitives/true')).toStrictEqual(true)
   set('/primitives/false', false)
@@ -102,7 +104,7 @@ test('primitives', () => {
   expect(get('/primitives/null')).toStrictEqual(null)
 })
 
-test('events', () => {
+test('events: basic', () => {
   let shouldHaveBeenCalled = 0
   const handleChange = jest.fn()
   const off = on('/a/1', handleChange)
@@ -124,6 +126,42 @@ test('events', () => {
 
   set('/a/1', { a: 1 })
   expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+
+})
+
+
+// test('events: advanced', () => {
+//   let shouldHaveBeenCalled = 0
+//   const handleChangeRoot = jest.fn()
+//   const handleChangeSubRoot = jest.fn()
+//   const handleChangeUser = jest.fn()
+// })
+
+test('computed', () => {
+  computed(
+    `/computed/sum`, 
+    [`/numbers`], 
+    ([n]) => n.reduce((s, n) => s + n, 0)
+  )
+
+  set('/numbers/1', 100)
+  
+  set('/numbers/2', 200)
+  expect(get('/computed/sum')).toStrictEqual(300)
+
+  set('/numbers/1', 5)
+  expect(get('/computed/sum')).toStrictEqual(205)
+
+  set('/numbers/1000', 5)
+  expect(get('/computed/sum')).toStrictEqual(210)
+
+  
+  computed(
+    `/computed/wtf`,
+    [`/computed/sum`, '/primitives/2'],
+    ([sum, p]) => sum * p
+  )
+  expect(get('/computed/wtf')).toStrictEqual(420)
 
 })
 
