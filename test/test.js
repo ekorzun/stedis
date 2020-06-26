@@ -81,38 +81,52 @@ const {
 // })
 
 
-test('events', () => {
-  let shouldHaveBeenCalled = 0
-  const handleChange = jest.fn()
-  const off = on('/a/1', handleChange)
-
-  set('/a/1', { a: 1 })
-  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
-
-  set('/a/1', { a: 1 })
-  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
-
-  off()
-  set('/a/1', { a: 1 })
-  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
-
-
-  once('/a/1', handleChange)
-  set('/a/1', { a: 1 })
-  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
-
-  set('/a/1', { a: 1 })
-  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
-
+test('primitives', () => {
+  set('/primitives/1', 1)
+  expect(get('/primitives/1')).toStrictEqual(1)
+  set('/primitives/1', '1')
+  expect(get('/primitives/1')).toStrictEqual('1')
+  set('/primitives/true', true)
+  expect(get('/primitives/true')).toStrictEqual(true)
+  set('/primitives/false', false)
+  expect(get('/primitives/false')).toStrictEqual(false)
+  const symbol = Symbol('symbol')
+  set('/primitives/symbol', symbol)
+  expect(get('/primitives/symbol')).toStrictEqual(symbol)
+  set('/primitives/nan', NaN)
+  expect(get('/primitives/nan')).toStrictEqual(NaN)
+  set('/primitives/undefined', undefined)
+  expect(get('/primitives/undefined')).toStrictEqual(undefined)
+  set('/primitives/null', null)
+  expect(get('/primitives/null')).toStrictEqual(null)
 })
 
-test('events performance', () => {
-  let shouldHaveBeenCalled = 0
-  const handleChange = jest.fn()
-  for(let i = -1; ++i < 3000;) {
-    set(`/i/${i}`, {i})
-  }
-})
+// test('events', () => {
+//   let shouldHaveBeenCalled = 0
+//   const handleChange = jest.fn()
+//   const off = on('/a/1', handleChange)
+
+//   set('/a/1', { a: 1 })
+//   expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+
+//   set('/a/1', { a: 1 })
+//   expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+
+//   off()
+//   set('/a/1', { a: 1 })
+//   expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+
+
+//   once('/a/1', handleChange)
+//   set('/a/1', { a: 1 })
+//   expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+
+//   set('/a/1', { a: 1 })
+//   expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+
+// })
+
+
 
 // test('virtualTree', done => {
 //   const handleChange = jest.fn()

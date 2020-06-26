@@ -42,7 +42,7 @@ const pathToIdsMap = new Map
 //   3: {username: 'user'}
 // }
 const objectValues = new Map
-
+const objectPrimitiveValues = new WeakMap
 
 // Flat object to internal ids mapping
 // Reversed objectValues
@@ -64,7 +64,7 @@ const objectParentLink = new WeakMap
 
 // Object is primitive
 // Because all values are objects inside Stedis
-const objectIsPrimitive = new WeakSet
+const objectIsPrimitive = new Map
 
 // Object is collection
 // @todo: Perf test WeakSet(ref) vs WeakMap(ref) vs Map(id)
@@ -163,6 +163,20 @@ const unsetEventsMap = new Map
 
 // 
 // 
+// 
+const isPrimitiveMap = new Map([
+  ['string', true],
+  ['number', true],
+  ['symbol', true],
+  ['boolean', true],
+  ['undefined', true],
+  ['null', true],
+])
+
+
+
+// 
+// 
 const uniqID = new function () {
   let id = isDev ? 0 : +new Date
   // Map.get( string ) works faster
@@ -223,7 +237,10 @@ export function on(path, type, handler) {
   }
   ns.get(type).set(handler, true)
   return () => {
-    globalEventsMap.get(path).get(type).delete(handler)
+    globalEventsMap
+      .get(path)
+      .get(type)
+      .delete(handler)
   }
 }
 
@@ -248,6 +265,7 @@ export function computed(path, from, toValue) {
   from.forEach((path) => {
     unsubscribe.push(on(path, setValue))
   })
+  return () => unsubscribe.forEach(u => u())
 }
 
 
@@ -258,8 +276,8 @@ export function computed(path, from, toValue) {
 // 
 function getListeners(path) {
   const selector = getOrCreateSelectorById(getOrCreateIdByPath(path))
-  console.log(objectToIdsMap)
-  console.log('selector', selector, objectEventsMap.has(selector), objectEventsMap)
+  // console.log(objectToIdsMap)
+  // console.log('selector', selector, objectEventsMap.has(selector), objectEventsMap)
   return objectEventsMap.get(selector)
 }
 
@@ -383,6 +401,7 @@ function getSelector(path) {
 
 
 
+
 // 
 // 
 // 
@@ -395,10 +414,21 @@ export function set(_path, value) {
 
   pathsToAdd.add(_path)
 
-  const selector = getSelector([...path])
+  const id = getOrCreateIdByPath(_path)
+  const selector = getOrCreateSelectorById(id)
 
   objectNeverWasUsed.delete(selector)
-  assign(selector, value)
+
+  if (isPrimitiveMap.get(typeof value) || value === null) {
+    
+    objectIsPrimitive.set(id, true)
+    objectPrimitiveValues.set(selector, value)
+    // objectValues.set(id, value)
+
+  } else {
+    objectIsPrimitive.delete(id)
+    assign(selector, value)
+  }
 
   setOrUpdateCollection([...path], selector)
   emitAll(_path, 'change', value)
@@ -432,6 +462,14 @@ export function merge(_path, value) {
 // 
 function getById(id) {
   const result = objectValues.get(id)
+  
+  // console.log(id, objectIsPrimitive, objectValues )
+
+
+  if(objectIsPrimitive.get(id)) {
+    return objectPrimitiveValues.get(result)
+  }
+
   // 
   // 
   if (objectNeverWasUsed.has(result)) {
@@ -449,16 +487,16 @@ function getById(id) {
 // 
 // 
 // 
-export function get(path, attributes, nested) {
+export function get(_path, attributes, nested) {
 
   if (attributes === true) {
     attributes = null
     nested = true
   }
 
-  path = parsePath(path)
+  const id = getOrCreateIdByPath(_path)
+  const path = parsePath(_path)
   // objectValues.get(getOrCreateIdByPath(parsePath(path)))
-  const id = getOrCreateIdByPath(path)
 
   if (nested) {
     // @todo:
@@ -575,3 +613,5 @@ export const __internal__for__debug__purpose__only__ = isDev ? {
 
 global.set = set
 global.get = get
+global.emit = emit
+global.on = on
