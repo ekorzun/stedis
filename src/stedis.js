@@ -340,7 +340,7 @@ const pathsToRemove = []
 function setOrUpdateCollection(path, selector) {
   const objId = objectToIdsMap.get(selector)
   path.pop()
-  const internalCollectionId = getOrCreateIdByPath(path)
+  const internalCollectionId = getOrCreateIdByPath(path.join('/'))
   let collection = collections.get(internalCollectionId)
 
   if (!collection) {
@@ -430,7 +430,7 @@ export function set(_path, value) {
     assign(selector, value)
   }
 
-  setOrUpdateCollection([...path], selector)
+  setOrUpdateCollection(_path.split('/'), selector)
   emitAll(_path, 'change', value)
   return value
 }
@@ -440,12 +440,14 @@ export function set(_path, value) {
 // 
 // 
 export function merge(_path, value) {
-  const path = parsePath(_path)
+  const path = _path.split('/')
+
   if (path.length % 2 === 0) {
-    throw new Error(`merge() method allowed only on objects, not collections. Check your path`)
+    throw new Error(`merge() method allowed only on objects, not collections. Check your path: ${_path}`)
   }
 
-  const selector = getSelector([...path])
+  const id = getOrCreateIdByPath(_path)
+  const selector = getOrCreateSelectorById(id)
 
   if (objectNeverWasUsed.has(selector)) {
     throw new Error(`merge() method allowed only on objects, not collections. Check your path`)
