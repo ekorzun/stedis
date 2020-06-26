@@ -462,6 +462,19 @@ export function merge(_path, value) {
 // 
 // 
 // 
+export function meta(path, value = undefined) {
+  const id = getOrCreateIdByPath(path)
+  const selector = getOrCreateSelectorById(id)
+  if( value === undefined ) {
+    return objectMetaData.get(selector)
+  }
+  objectMetaData.set(selector, value)
+  return value
+}
+
+// 
+// 
+// 
 function getById(id) {
   const result = objectValues.get(id)
   
