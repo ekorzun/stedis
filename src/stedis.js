@@ -275,16 +275,28 @@ function iteratePath(path, callback) {
 // 
 // 
 // 
-const pathsToAdd = []
+const pathsToAdd = new Set
 const pathsToRemove = []
 !(function updateVirtualTree(path, parentPath = null, context = virtualTree) {
-  let added = path || pathsToAdd.shift()
+  
+  // console.log(pathsToAdd.size)
+  let added = path
+  if(!added) {
+    added = pathsToAdd.size ? [...pathsToAdd][0] : null
+    if (added) {
+      pathsToAdd.delete(added)
+    }
+  }
+
   if (added) {
 
+    added = added.split(PATH_SEPARATOR)
     const { length } = added
     // console.log(`[update vTree]: pp=${parentPath},  p=${added} (${length})`)
     const [first] = added
-    const id = getOrCreateIdByPath(parentPath ? [...parentPath, first] : first)
+    const id = getOrCreateIdByPath(
+      parentPath ? [...parentPath, first] : first
+    )
 
     if (!context.has(id)) {
       context.set(id, new Map)
@@ -292,7 +304,7 @@ const pathsToRemove = []
 
     if (length > 1) {
       return updateVirtualTree(
-        added.filter((x, i) => i),
+        added.filter((x, i) => i).join(PATH_SEPARATOR),
         parentPath ? [...parentPath, first] : [first],
         context.get(id)
       )
@@ -381,7 +393,7 @@ export function set(_path, value) {
     throw new Error(`set() method allowed only on objects, not collections. Check your path`)
   }
 
-  pathsToAdd.push([...path])
+  pathsToAdd.add(_path)
 
   const selector = getSelector([...path])
 
