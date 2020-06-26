@@ -1,13 +1,13 @@
-import { useEffect, useState, useRef} from 'react'
-import {get, on} from './inbox'
+import { useEffect, useState, useRef, useCallback, useMemo} from 'react'
+import {get, on} from './stedis'
 
-export const useValue = uri => {
-  const [value, setValue] = useState(get(uri))
+export const useGetValue = uri => {
+  const [, setValue] = useState(1)
   const watcher = useRef()
 
   useEffect(() => {
     watcher.current && watcher.current()
-    setValue(get(uri))
+    setValue(p => ++p)
     watcher.current = on(uri, 'change', setValue)
   }, [uri])
 
@@ -15,5 +15,21 @@ export const useValue = uri => {
     return watcher.current
   }, [])
   
-  return value
+  return get(uri)
+}
+
+
+export const useSetValue = uri => {
+  const setValue = useMemo(v => {
+    return set(uri, v)
+  }, [uri])
+  return setValue
+}
+
+export const useValue = uri => {
+  const value = useGetValue(uri)
+  const setValue = useCallback(v => {
+    return set(uri, v)
+  }, [uri])
+  return [value, setValue]
 }

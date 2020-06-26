@@ -1,6 +1,8 @@
 const { Suite } = require('benchmark')
 const suite = new Suite
 
+// Fastest is new Object
+
 suite
   .add('new Object', function () {
     return new Object

@@ -1,4 +1,153 @@
 
+
+
+// 
+// 
+// 
+function emitGlobalPathEvents(path, type, payload) {
+
+  if (!globalEventsMap.has(type)) {
+    return
+  }
+
+  const typeCallbacks = globalEventsMap.get(type)
+
+  if (!typeCallbacks) {
+    return
+  }
+
+  // console.log(globalEventsMap)
+  const checkers = [...typeCallbacks.keys()]
+  const callbacks = [...typeCallbacks.values()]
+
+  // console.log(type, '------------------------------------------------------------------------------------')
+  // console.log(checkers)
+  // console.log(callbacks)
+
+  while (path.length) {
+    const currentPath = path.join(PATH_SEPARATOR)
+    // console.log('IS MATCHE', currentPath)
+    // console.log(checkersArray[0])
+    checkers.forEach((isMatch, index) => {
+      // console.log('IS MATCHE', currentPath, isMatch(currentPath))
+      if (isMatch(currentPath)) {
+        [...callbacks[index]].forEach((callback) => {
+          callback(payload)
+        })
+      }
+    })
+
+    path.pop()
+  }
+}
+
+
+
+// 
+// 
+// 
+export function on(path, type = 'change', callback) {
+  if (typeof type === 'function') {
+    callback = type
+    type = 'change'
+  }
+  path = parsePath(path)
+  const id = getOrCreateIdByPath(path)
+  const selector = getOrCreateSelectorById(id)
+  if (!objectEventsMap.has(selector)) {
+    objectEventsMap.set(selector, new Map)
+  }
+  const events = objectEventsMap.get(selector)
+  if (!events.has(type)) {
+    events.set(type, new Set)
+  }
+  const eventsByType = events.get(type)
+  eventsByType.add(callback)
+
+  return () => {
+    eventsByType.delete(callback)
+  }
+}
+
+
+
+// 
+// 
+// 
+export function watch(pattern, type = 'change', callback) {
+  pattern = getOrCreatePathPattern(pattern)
+  if (typeof type === 'function') {
+    callback = type
+    type = 'change'
+  }
+
+  if (!globalEventsMap.has(type)) {
+    globalEventsMap.set(type, new Map)
+  }
+  const globalEventsTypeMap = globalEventsMap.get(type)
+  if (!globalEventsTypeMap.has(pattern)) {
+    globalEventsTypeMap.set(pattern, new Set)
+  }
+  
+  globalEventsTypeMap.get(pattern).add(callback)
+
+
+  return () => {
+    globalEventsMap.get(type).get(pattern).delete(callback)
+  }
+}
+
+
+
+// Compiled patterns storage
+// 
+// Map {
+//   `/user/*` : path => /\/user/.+/.test(path)
+// }
+const patternsCacheMap = new Map
+
+// 
+// 
+// 
+function getOrCreatePathPattern(pattern) {
+  if (patternsCacheMap.has(pattern)) {
+    return patternsCacheMap.get(pattern)
+  }
+
+  const regex = new RegExp(`^${
+    pattern.split(
+      PATH_SEPARATOR
+    ).map(x => x.replace('*', '[a-zA-Z0-9\-_@]*')).join(`\/`)
+    }$`)
+  const isMatch = (path) => regex.test(path)
+  patternsCacheMap.set(pattern, isMatch)
+  return isMatch
+}
+
+
+
+
+
+// 
+// 
+// 
+export function emit(path, type = 'change', payload, emitAllParents) {
+  path = parsePath(path)
+  const id = getOrCreateIdByPath(path)
+  const selector = getOrCreateSelectorById(id)
+  if (objectEventsMap.has(selector)) {
+    const events = objectEventsMap.get(selector)
+    if (events && events.has(type)) {
+      // console.log(events.get(type))
+      [...events.get(type)].forEach(callback => {
+        callback(payload)
+      })
+    }
+  }
+}
+
+
+
 //
 const nextPatches = []
 

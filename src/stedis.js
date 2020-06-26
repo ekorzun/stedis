@@ -1,13 +1,13 @@
-const isDev = process.env.NODE_ENV !== "production"
+const isDev = false // process.env.NODE_ENV !== 'production'
 
 const PATH_SEPARATOR = '/'
 
-const 
-  
+const
+
   ERROR_ONLY_OBJECT_METHOD = isDev ? `
 
   ` : 'ERROR_ONLY_OBJECT_METHOD',
-  
+
   ERROR_ONLY_COLLECTION_METHOD = isDev ? `
 
   ` : 'ERROR_ONLY_COLLECTION_METHOD =',
@@ -16,31 +16,85 @@ const
     
   ` : 'ERROR_MERGE_BEFORE_SET'
 
-
-
+// Tree-like structure
+// Map {
+//  [root_id] : Map {
+//    [child_id1] : Map {
+//      [child_id2] : ....
+//    }
+//  }
+// }
 // 
 const virtualTree = new Map
 
-// 
+// Paths to internal ids mapping
+// Map {
+//   '/': 1,
+//   '/user': 2,
+//   '/user/1': 3,
+//   '/user/2': 4
+// }
 const pathToIdsMap = new Map
 
-// 
+// Flat internal ids to object values mapping
+// Map {
+//   2: [3, 4],
+//   3: {username: 'user'}
+// }
 const objectValues = new Map
 
-// 
+
+// Flat object to internal ids mapping
+// Reversed objectValues
+// WeakMap {
+//   [ objectRef2 ]: 2,
+//   [ objectRef3 ]: 3,
+// }
+const objectToIdsMap = new WeakMap
+
+// Objects meta data
+// @todo: Perf test WeakMap(ref) vs Map(id)
+// WeakMap {
+//   [object reference]: {}
+// }
 const objectMetaData = new WeakMap
 
 // 
 const objectParentLink = new WeakMap
 
+// Object is primitive
+// Because all values are objects inside Stedis
+const objectIsPrimitive = new WeakSet
+
+// Object is collection
+// @todo: Perf test WeakSet(ref) vs WeakMap(ref) vs Map(id)
+// WeakSet [ ObjRef1, ObjRef2 ]
+const objectIsCollection = new WeakSet
+
+// Object is computed from other objects
+// @todo: Perf test WeakSet(ref) vs WeakMap(ref) vs Map(id)
+// WeakSet [ ObjRef1, ObjRef2 ]
+const objectIsComputed = new WeakSet
+
+// Object never was used
+// It is possible that object was automatically created by Stedis.
+// 
+// For example: set(`/user/1/todo/2`, {})
+// set() will create:
+//    - /user/1/todo as collection
+//    - /user/1 as object
+//    - /user as collection
+// But actually they all must have an undefined value.
+// So after creation they all should be marked as never used before.
+// 
+// @todo: Perf test WeakSet(ref) vs WeakMap(ref) vs Map(id)
+// WeakMap [ ObjRef1, ObjRef2 ]
+const objectNeverWasUsed = new WeakSet
+
 // 
 const collections = new Map
 
-// 
-const objectToIdsMap = new WeakMap
 
-// 
-const objectNeverWasUsed = new WeakSet
 
 // 
 const invalidPaths = new WeakMap
@@ -49,92 +103,132 @@ const invalidPaths = new WeakMap
 const objectEventsMap = new WeakMap
 
 // 
+// Map {
+//   [level = 1] : Map {
+//     [/user]: Map {
+//       [type] : Set [
+//         cb1, cb2
+//       ]
+//     }
+//   }
+//   [level = 2] : Map {
+//     [/user/1]: Map {
+//      [change]: Set []
+//     }
+//   }
+// }
+// 
+// 
+// set('/user/1/todo/1', {}) Will emit:
+// - emit('/user/1/todo/1')       === lvl 4 @ change
+// - emit('/user/1/todo/*')       === lvl 4 @ change
+// - emit('/user/1/todo', 'add')  === lvl 3 @ add
+// - emit('/user/1/todo')         === lvl 3 @ change
+// - emit('/user/1/*')            === lvl 3 @ change
+// - emit('/user/1')              === lvl 2 @ change
+// - emit('/user/*')              === lvl 2 @ change
+// - emit('/user')                === lvl 1 @ change
+// - emit('/*')                   === lvl 1 @ change
+// - emit('/')                    === lvl 0 @ change
+// 
+// 
+// Assume we have subscriber on('/user/1/*')
+// So the handler will be placed in:
+// ES[ level = 3 ][ /user/1/* ][ [isMatch]: handle ]
+// 
+// emit('/user/1/todo/1')
+// ES[ level = 4 ] is empty
+// emit('/user/1/todo/*')
+// ES[ level = 4 ] is empty
+// emit('/user/1/todo')
+// ES[ level = 3 ] is not empty
+//    ES[ level = 3 ][/user/1/todo] is empty
+//    ES[ level = 3 ][/user/1/*] is not empty
+//      ES[ level = 3 ][/user/1/*][0][isMatch](/user/1/todo)(event)
+// 
+// 
+// Another option:
+// Assume we have subscriber on('/user/1/*')
+// So the handler will be placed in:
+// ES[ /user/1/* ][change][handle]
+// 
+// @todo: Think about handler id against uri
+// 
 const globalEventsMap = new Map
 
+// Set of callbacks should be emitted before any object
+// will be unset (like unsubscribe for computed 
+// or rebuild virtual tree)
+const unsetEventsMap = new Map
 
 // 
 // 
-// 
-const patternsCacheMap = new Map
-
-
 const uniqID = new function () {
-  let id = 1 // +new Date
-  return () => id++
+  let id = isDev ? 0 : +new Date
+  // Map.get( string ) works faster
+  return () => (++id).toString()
 }
 
+// Map contains source uri path as key
+// and the parent
+// 
+const emittersShouldBeFiredOnPath = new Map
 
-function getOrCreatePathPattern(pattern) {
-  if (patternsCacheMap.has(pattern)) {
-    return patternsCacheMap.get(pattern)
+function getParentEventNames(path) {
+  return emittersShouldBeFiredOnPath.get(path) || createParentEventNames(path)
+}
+
+function createParentEventNames(path) {
+  const arr = []
+  while (path) {
+    arr.push(path, path.replace(/\w+$/, '*'))
+    path = path.replace(/\/\w+$/, '')
   }
-  
-  const regex = new RegExp(`^${
-    pattern.split(
-      PATH_SEPARATOR
-    ).map(x => x.replace('*', '.*')).join(`\/`)
-  }$`)
-
-  const isMatch = (path) => regex.test(path)
-  patternsCacheMap.set(pattern, isMatch)
-  return isMatch
+  emittersShouldBeFiredOnPath.set(path, arr)
+  return arr
 }
 
+function emitAll(path, type = 'change', payload = undefined) {
+  const allPaths = getParentEventNames(path)
+  allPaths.forEach(path => {
+    emit(path, type, payload)
+  })
+}
 
-// 
-// 
-// 
-function watch(pattern, type = 'change', callback) {
-  pattern = getOrCreatePathPattern(pattern)
+function emit(path, type, payload) {
+  // console.log(`[emit2]: ${path}`)
+  const ns = globalEventsMap.get(path)
+  if (!ns) { return }
+  const callbacks = ns.get(type)
+  // console.log('callbacks', type, ns, callbacks)
+  if (!callbacks) { return }
+  for (const callback of callbacks.keys()) {
+    // console.log('callback', callback)
+    if (callback(payload) === false) {
+      return
+    }
+  }
+}
+
+export function on(path, type, handler) {
   if (typeof type === 'function') {
-    callback = type
+    handler = type
     type = 'change'
   }
-
-  if (!globalEventsMap.has(type)) {
-    globalEventsMap.set(type, new Map)
+  let ns = globalEventsMap.get(path)
+  if (!ns) {
+    ns = new Map
+    ns.set(type, new Map)
+    globalEventsMap.set(path, ns)
   }
-  const globalEventsTypeMap = globalEventsMap.get(type)
-  if (!globalEventsTypeMap.has(pattern)) {
-    globalEventsTypeMap.set(pattern, new Set)
-  }
-  globalEventsTypeMap.get(pattern).add(callback)
-
-
+  ns.get(type).set(handler, true)
   return () => {
-    globalEventsMap.get(type).get(pattern).delete(callback)
+    globalEventsMap.get(path).get(type).delete(handler)
   }
 }
 
 
-
-// 
-// 
-// 
-function on(path, type = 'change', callback) {
-  if(typeof type === 'function') {
-    callback = type
-    type = 'change'
-  }
-  path = parsePath(path)
-  const id = getOrCreateIdByPath(path)
-  const selector = getOrCreateSelectorById(id)
-  if (!objectEventsMap.has(selector)) {
-    objectEventsMap.set(selector, new Map)
-  }
-  const events = objectEventsMap.get(selector)
-  if (!events.has(type)) {
-    events.set(type, new Set)
-  }
-  const eventsByType = events.get(type)
-  eventsByType.add(callback)
-
-  return () => {
-    eventsByType.delete(callback)
-  }
-}
-
-function once(path, type, callback) {
+export function once(path, type, callback) {
   if (typeof type === 'function') {
     callback = type
     type = 'change'
@@ -146,24 +240,28 @@ function once(path, type, callback) {
 }
 
 
-// 
-// 
-// 
-function emit(path, type = 'change', payload, emitAllParents) {
-  path = parsePath(path)
-  const id = getOrCreateIdByPath(path)
-  const selector = getOrCreateSelectorById(id)
-  if (objectEventsMap.has(selector)) {
-    const events = objectEventsMap.get(selector)
-    if (events && events.has(type)) {
-      // console.log(events.get(type))
-      [...events.get(type)].forEach(callback => {
-        callback(payload)
-      })
-    }
+export function computed(path, from, toValue) {
+  const unsubscribe = []
+  const setValue = () => {
+    set(path, toValue(from.map(get)))
   }
+  from.forEach((path) => {
+    unsubscribe.push(on(path, setValue))
+  })
 }
 
+
+
+
+// 
+// 
+// 
+function getListeners(path) {
+  const selector = getOrCreateSelectorById(getOrCreateIdByPath(path))
+  console.log(objectToIdsMap)
+  console.log('selector', selector, objectEventsMap.has(selector), objectEventsMap)
+  return objectEventsMap.get(selector)
+}
 
 
 // 
@@ -173,47 +271,6 @@ function iteratePath(path, callback) {
   path = parsePath(path)
 
 }
-
-
-// 
-// 
-// 
-function emitGlobalPathEvents(path, type, payload) {
-
-  if (!globalEventsMap.has(type)) {
-    return
-  }
-  const typeCallbacks = globalEventsMap.get(type)
-
-  if (!typeCallbacks) {
-    return
-  }
-
-  // console.log(globalEventsMap)
-  const checkers = [...typeCallbacks.keys()]
-  const callbacks = [...typeCallbacks.values()]
-
-  // console.log(type, '------------------------------------------------------------------------------------')
-  // console.log(checkers)
-  // console.log(callbacks)
-
-  while (path.length) {
-    const currentPath = path.join(PATH_SEPARATOR)
-    // console.log("IS MATCHE", currentPath)
-    // console.log(checkersArray[0])
-    checkers.forEach((isMatch, index) => {
-      // console.log("IS MATCHE", currentPath, isMatch(currentPath))
-      if (isMatch(currentPath)) {
-        [...callbacks[index]].forEach((callback) => {
-          callback(payload)
-        })
-      }
-    })
-
-    path.pop()
-  }
-}
-
 
 // 
 // 
@@ -254,18 +311,17 @@ function setOrUpdateCollection(path, selector) {
   const objId = objectToIdsMap.get(selector)
   path.pop()
   const internalCollectionId = getOrCreateIdByPath(path)
-  let collection
-  if (collections.has(internalCollectionId)) {
-    collection = collections.get(internalCollectionId)
-  } else {
+  let collection = collections.get(internalCollectionId)
+
+  if (!collection) {
     collection = new Set
+    // collection = new Map
     collections.set(internalCollectionId, collection)
   }
 
   collection.add(objId)
-
-  emit([...path], 'change', get(path))
-
+  // collections.set(objId, true)
+  // return collection.keys()
   return collection
 }
 
@@ -295,7 +351,7 @@ function getOrCreateSelectorById(id) {
   if (objectValues.has(id)) {
     return objectValues.get(id)
   }
-  const selector = createObj({})
+  const selector = new Object
   objectValues.set(id, selector)
   objectToIdsMap.set(selector, id)
   objectNeverWasUsed.add(selector)
@@ -318,8 +374,8 @@ function getSelector(path) {
 // 
 // 
 // 
-function set(path, value) {
-  path = parsePath(path)
+export function set(_path, value) {
+  const path = parsePath(_path)
 
   if (path.length % 2 === 0) {
     throw new Error(`set() method allowed only on objects, not collections. Check your path`)
@@ -333,32 +389,30 @@ function set(path, value) {
   assign(selector, value)
 
   setOrUpdateCollection([...path], selector)
-  
-  emit([...path], 'change', value)
-  emitGlobalPathEvents([...path], 'change', value)
+  emitAll(_path, 'change', value)
+  return value
 }
 
 
 // 
 // 
 // 
-function merge(path, value) {
-  path = parsePath(path)
+export function merge(_path, value) {
+  const path = parsePath(_path)
   if (path.length % 2 === 0) {
     throw new Error(`merge() method allowed only on objects, not collections. Check your path`)
   }
 
   const selector = getSelector([...path])
-  
+
   if (objectNeverWasUsed.has(selector)) {
     throw new Error(`merge() method allowed only on objects, not collections. Check your path`)
   }
 
   assign(selector, value)
-  
-  emit([...path], 'change', value)
-  emitGlobalPathEvents([...path], 'change', value)
 
+  emitAll(_path, 'change', value)
+  return value
 }
 
 // 
@@ -372,17 +426,18 @@ function getById(id) {
     return undefined
   }
   if (isDev) {
-    return result ? Object.freeze(clone(result)) : result
+    return result ? freeze(clone(result)) : result
   }
   return result
 }
 
 
 
+
 // 
 // 
 // 
-function get(path, attributes, nested) {
+export function get(path, attributes, nested) {
 
   if (attributes === true) {
     attributes = null
@@ -413,8 +468,16 @@ function get(path, attributes, nested) {
       }, {})
     }
     return objectValue
+  } else {
+    return getExpandedCollection(id, attributes, nested)
   }
+}
 
+
+// 
+// 
+// 
+function getExpandedCollection(id, attributes) {
   const probableCollection = collections.get(id)
 
   if (probableCollection) {
@@ -425,7 +488,7 @@ function get(path, attributes, nested) {
           result[attr] = objectValue[attr]
           return result
         }, {})
-        return isDev ? Object.freeze(compiledObject) : compiledObject
+        return isDev ? freeze(compiledObject) : compiledObject
       })
     }
     return [...probableCollection].map(getById)
@@ -433,9 +496,13 @@ function get(path, attributes, nested) {
   return undefined
 }
 
-function getNested(path, attributes) {
+// 
+// 
+// 
+export function getNested(path, attributes) {
   return get(path, attributes, true)
 }
+
 
 
 // 
@@ -449,38 +516,16 @@ function parsePath(path) {
 }
 
 
-
-
-
-// 
-// 
-// 
-function createObj(obj, path) {
-  const type = typeof obj
-  if (type === 'string') { return obj }
-  if (type === 'number') { return obj }
-  if (type === 'undefined') { return obj }
-  if (Array.isArray(obj)) { return obj }
-  if (obj && typeof obj === 'object') {
-    // obj._id = uniqID()
-    // path && (obj._path = path)
-    // @todo
-    // keys storage
-    Object.keys(obj).forEach(key => {
-      obj[key] = createObj(obj[key], path ? (path + PATH_SEPARATOR + key) : key)
-    })
-    // indexByID[obj._id] = obj
-  }
-  return obj
-}
-
-
 function clone(o) {
   return JSON.parse(JSON.stringify(o))
 }
 
 function assign(source, value) {
   Object.assign(source, value)
+}
+
+function freeze(o) {
+  return Object.freeze(o)
 }
 
 function objectMethod(...args) {
@@ -493,19 +538,28 @@ function objectMethod(...args) {
 }
 
 
-const __internal__for__debug__purpose__only__ = { 
-  pathToIdsMap, 
-  virtualTree 
+export function subState(_path) {
+  const wrap = (method) => (path, ...args) => method.apply(null, [`${_path}${path}`, ...args])
+  return [
+    get, set, merge, on
+  ].reduce((acc, fn) => {
+    acc[fn.name] = wrap(fn)
+    return acc
+  }, {})
 }
+
 
 export {
-  set, merge, 
-  get, 
-  on, once, emit, watch,
-  getNested,
-
-  __internal__for__debug__purpose__only__
+  emitAll as emit
 }
 
+export const __internal__for__debug__purpose__only__ = isDev ? {
+  pathToIdsMap,
+  virtualTree,
+  objectEventsMap,
+  objectToIdsMap,
+  globalEventsMap,
+} : {}
 
 global.set = set
+global.get = get
