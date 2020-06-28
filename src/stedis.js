@@ -240,6 +240,11 @@ export function once(path, type, handler) {
   emitterAPI.once(ekey, handler)
 }
 
+export function off(path, type = 'change', handler ) {
+  const ekey = `${path}:${type}`
+  emitterAPI.off(ekey, handler)
+}
+
 export function emit(evt, payload) {
   emitterAPI.emit(evt, payload)
 }
