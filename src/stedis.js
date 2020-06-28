@@ -1,3 +1,6 @@
+import emitterAPI from './emitter'
+
+
 const isDev = process.env.NODE_ENV !== 'production'
 
 const PATH_SEPARATOR = '/'
@@ -173,14 +176,28 @@ const isPrimitiveMap = new Map([
   ['null', true],
 ])
 
-
+// [ /user/1 ]
+// docs [ uri ]
+// collections [uri]
+// tags [uri#tag]
+// es [ uri:type ]: [id1, id2]
+// hc [ uri:type:id ]
+// hs [ uri:type:id ]
+// ces [uri:type] : () => es[uri:type]()
+// 
+// 
+// [ uri:type ]
+// [ uri:type:id ]
+// [ uri:type:id ]
+// 
+// 
 
 // 
 // 
 const uniqID = new function () {
   let id = isDev ? 0 : +new Date
   // Map.get( string ) works faster
-  return () => (++id).toString()
+  return () => `_$${++id}`
 }
 
 // Map contains source uri path as key
@@ -202,60 +219,37 @@ function createParentEventNames(path) {
   return arr
 }
 
-function emitAll(path, type = 'change', payload = undefined) {
-  const allPaths = getParentEventNames(path)
-  allPaths.forEach(path => {
-    emit(path, type, payload)
-  })
-}
-
-function emit(path, type, payload) {
-  // console.log(`[emit2]: ${path}`)
-  const ns = globalEventsMap.get(path)
-  if (!ns) { return }
-  const callbacks = ns.get(type)
-  // console.log('callbacks', type, ns, callbacks)
-  if (!callbacks) { return }
-  for (const callback of callbacks.keys()) {
-    // console.log('callback', callback)
-    if (callback(payload) === false) {
-      return
-    }
-  }
-}
-
-export function on(path, type, handler) {
+export function on(path, type = 'change', handler) {
   if (typeof type === 'function') {
     handler = type
     type = 'change'
   }
-  let ns = globalEventsMap.get(path)
-  if (!ns) {
-    ns = new Map
-    ns.set(type, new Map)
-    globalEventsMap.set(path, ns)
-  }
-  ns.get(type).set(handler, true)
+  const ekey = `${path}:${type}`
+  emitterAPI.on(ekey, handler)
   return () => {
-    globalEventsMap
-      .get(path)
-      .get(type)
-      .delete(handler)
+    emitterAPI.off(ekey, handler)
   }
 }
 
-
-export function once(path, type, callback) {
+export function once(path, type, handler) {
   if (typeof type === 'function') {
-    callback = type
+    handler = type
     type = 'change'
   }
-  const off = on(path, type, (e) => {
-    callback(e)
-    off()
-  })
+  const ekey = `${path}:${type}`
+  emitterAPI.once(ekey, handler)
 }
 
+export function emit(evt, payload) {
+  emitterAPI.emit(evt, payload)
+}
+
+export function notify(path, type = 'change', payload = undefined) {
+  const allPaths = getParentEventNames(path)
+  for (let i = -1, t = allPaths.length; ++i < t;){
+    emit(`${allPaths[i]}:${type}`, payload)
+  }
+}
 
 export function computed(path, from, toValue) {
   const unsubscribe = []
@@ -271,19 +265,6 @@ export function computed(path, from, toValue) {
   } catch (e) {}
 
   return () => unsubscribe.forEach(u => u())
-}
-
-
-
-
-// 
-// 
-// 
-function getListeners(path) {
-  const selector = getOrCreateSelectorById(getOrCreateIdByPath(path))
-  // console.log(objectToIdsMap)
-  // console.log('selector', selector, objectEventsMap.has(selector), objectEventsMap)
-  return objectEventsMap.get(selector)
 }
 
 
@@ -436,7 +417,7 @@ export function set(_path, value) {
   }
 
   setOrUpdateCollection(_path.split('/'), selector)
-  emitAll(_path, 'change', value)
+  notify(_path, 'change', value)
   return value
 }
 
@@ -460,7 +441,7 @@ export function merge(_path, value) {
 
   assign(selector, value)
 
-  emitAll(_path, 'change', value)
+  notify(_path, 'change', value)
   return value
 }
 
@@ -475,6 +456,38 @@ export function meta(path, value = undefined) {
   }
   objectMetaData.set(selector, value)
   return value
+}
+
+// 
+// 
+// 
+const taggedCollectionsMap = new Map
+export function tag(path, tagName, comparator) {
+  const key = `${path}#${tagName}`
+  let tg = taggedCollectionsMap.get(key)
+  if(!tg) {
+    tg = new Set
+    taggedCollectionsMap.set(key, tg)
+  }
+
+  on(path, 'change', value => {
+    if (comparator(value) === true){
+      tg.add(value)
+    } else {
+      tg.delete(value)
+    }
+  })
+
+  // /tasks#my,done
+  // #a|b #a,b
+  // [...new Set([...tagA, ...tagB])
+  // #a&b 
+  // [...tagA].filter(x => tagB.has(x));
+
+}
+
+export function getTag(path, tag){
+  return [...taggedCollectionsMap.get(`${path}#${tag}`)]
 }
 
 // 
@@ -539,7 +552,7 @@ export function get(_path, attributes, nested) {
     }
     return objectValue
   } else {
-    return getExpandedCollection(id, attributes, nested)
+    return getExpandedCollection(_path, id, attributes, nested)
   }
 }
 
@@ -547,10 +560,18 @@ export function get(_path, attributes, nested) {
 // 
 // 
 // 
-function getExpandedCollection(id, attributes) {
-  const probableCollection = collections.get(id)
+function getExpandedCollection(_path, id, attributes) {
+  let probableCollection = collections.get(id)
 
   if (probableCollection) {
+
+    const [path, tag] = _path.split('#')
+
+    if (tag) {
+      // probableCollection = taggedCollectionsMap.get(_path)
+      return getTag(path, tag)
+    }
+    
     if (attributes) {
       return [...probableCollection].map(id => {
         const objectValue = getById(id)
@@ -619,9 +640,9 @@ export function subState(_path) {
 }
 
 
-export {
-  emitAll as emit
-}
+// export {
+//   notify as emit
+// }
 
 export const __internal__for__debug__purpose__only__ = isDev ? {
   pathToIdsMap,
@@ -633,5 +654,5 @@ export const __internal__for__debug__purpose__only__ = isDev ? {
 
 global.set = set
 global.get = get
-global.emit = emit
+global.emit = notify
 global.on = on
