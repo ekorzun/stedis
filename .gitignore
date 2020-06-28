@@ -1,5 +1,5 @@
 .cache
 coverage
-internal_benchmarks/emiters
+internal_benchmarks/emitters
 dist
 node_modules
