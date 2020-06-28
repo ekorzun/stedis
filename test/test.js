@@ -1,29 +1,10 @@
 import {
   merge, set, get, once, on,
-  getListeners,
-  emit,
+  tag,
   computed,
   __internal__for__debug__purpose__only__
 } from '../src/stedis'
 
-
-// computed(
-//   '/computed/total',
-//   ['/items'],
-//   ([items]) => items.reduce((t, i) => {
-//     t.v += i.price
-//     return t
-//   }, { v: 0 }))
-
-// set('/items/1', { price: 100 })
-// set('/items/2', { price: 50 })
-
-// console.log("COMPUTED:", get('/computed/total'))
-
-// registerFilter('@overpriced', item => item.price > 50)
-
-// tag('/items#overpriced', item => item.price > 50)
-// get('/items#overpriced')
 
 
 const {
@@ -75,7 +56,6 @@ test('vse', () => {
   expect(get('/a')).toEqual([{ a: 1 }, { a: 2 }])
 
   merge('/a/2', { foo: 'bar' })
-
   expect(get('/a/2')).toEqual({ a: 2, foo: 'bar' })
   expect(get('/a')).toEqual([{ a: 1 }, { a: 2, foo: 'bar' }])
 
@@ -104,9 +84,11 @@ test('primitives', () => {
   expect(get('/primitives/null')).toStrictEqual(null)
 })
 
+
+const handleChange = jest.fn()
+
 test('events: basic', () => {
   let shouldHaveBeenCalled = 0
-  const handleChange = jest.fn()
   const off = on('/a/1', handleChange)
 
   set('/a/1', { a: 1 })
@@ -114,6 +96,7 @@ test('events: basic', () => {
 
   set('/a/1', { a: 1 })
   expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+
 
   off()
   set('/a/1', { a: 1 })
@@ -123,21 +106,33 @@ test('events: basic', () => {
   once('/a/1', handleChange)
   set('/a/1', { a: 1 })
   expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
 
+  set('/a/1', { a: 1 })
   set('/a/1', { a: 1 })
   expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
 
 })
 
 
-// test('events: advanced', () => {
-//   let shouldHaveBeenCalled = 0
-//   const handleChangeRoot = jest.fn()
-//   const handleChangeSubRoot = jest.fn()
-//   const handleChangeUser = jest.fn()
-// })
+test('events: parents', () => {
+  const handleChangeRoot = jest.fn()
+  const handleChangeSubRoot = jest.fn()
+  const handleChangeUser = jest.fn()
+  const handleChangeAnyUser = jest.fn()
 
-test('computed', () => {
+
+  const offRoot = on('/', handleChangeRoot)
+  const offSubRoot = on('/user', handleChangeSubRoot)
+  const offUser = on('/user/1', handleChangeUser)
+
+  set(`/user/1/todo/2`)
+
+})
+
+
+test('computed: basic', () => {
   computed(
     `/computed/sum`, 
     [`/numbers`], 
@@ -166,39 +161,35 @@ test('computed', () => {
 })
 
 
+test('tagged', () => {
+  tag(`/tasks`, 'my', task => task.user === 'me')
+  
+  set('/tasks/1', {id: 1, user: 'me'})
+  set('/tasks/2', {id: 2, user: 'notme'})
 
-// test('virtualTree', done => {
-//   const handleChange = jest.fn()
-//   set('/c/3', {foo: 'bar'})
-//   const off = on('/c/3', handleChange)
-
-//   setTimeout(() => {
-//     console.log(getListeners(`/c/3`))
-//     console.log(virtualTree)
-//     done()
-//   }, 500)
-// })
-
-
-// test('watchers', () => {
-//   let shouldHaveBeenCalled = 0
-//   const handleChange = jest.fn()
-//   on(`/a/*`, handleChange)
-//   console.log(globalEventsMap)
-
-//   emitAll(`/a/1`)
-//   expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
-//   emitAll(`/a/2`)
-//   expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
-
-// })
+  expect(get('/tasks#my')).toEqual([{ id: 1, user: 'me' }])
+})
 
 
 
-// transformGet(`/user/*`, user => {
-//   return {
-//     ...user,
-//     user_id: user.id,
-//     full_name: `${user.name} ${user.last_name}`
-//   }
-// })
+// // test('virtualTree', done => {
+// //   const handleChange = jest.fn()
+// //   set('/c/3', {foo: 'bar'})
+// //   const off = on('/c/3', handleChange)
+
+// //   setTimeout(() => {
+// //     console.log(getListeners(`/c/3`))
+// //     console.log(virtualTree)
+// //     done()
+// //   }, 500)
+// // })
+
+
+
+// // transformGet(`/user/*`, user => {
+// //   return {
+// //     ...user,
+// //     user_id: user.id,
+// //     full_name: `${user.name} ${user.last_name}`
+// //   }
+// // })

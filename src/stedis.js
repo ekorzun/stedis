@@ -527,8 +527,11 @@ export function get(_path, attributes, nested) {
     nested = true
   }
 
-  const id = getOrCreateIdByPath(_path)
-  const path = parsePath(_path)
+  let [path, tag] = _path.split('#')
+
+  const id = getOrCreateIdByPath(path)
+  const pathParts = parsePath(path)
+
   // objectValues.get(getOrCreateIdByPath(parsePath(path)))
 
   if (nested) {
@@ -536,8 +539,10 @@ export function get(_path, attributes, nested) {
     // Navigate through virtual tree
   }
 
+
+
   // console.log(path, path.length)
-  if (path.length % 2 === 1) {
+  if (pathParts.length % 2 === 1) {
     const objectValue = getById(id)
 
     if (!objectValue) {
@@ -552,7 +557,7 @@ export function get(_path, attributes, nested) {
     }
     return objectValue
   } else {
-    return getExpandedCollection(_path, id, attributes, nested)
+    return getExpandedCollection(path, id, attributes, tag, nested)
   }
 }
 
@@ -560,16 +565,14 @@ export function get(_path, attributes, nested) {
 // 
 // 
 // 
-function getExpandedCollection(_path, id, attributes) {
+function getExpandedCollection(_path, id, attributes, tag, nested) {
   let probableCollection = collections.get(id)
 
   if (probableCollection) {
 
-    const [path, tag] = _path.split('#')
 
     if (tag) {
-      // probableCollection = taggedCollectionsMap.get(_path)
-      return getTag(path, tag)
+      return getTag(_path, tag)
     }
     
     if (attributes) {
