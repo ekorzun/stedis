@@ -1,10 +1,19 @@
 import {
-  merge, set, get, once, on,
-  tag,
+  merge, 
+  set, 
+  get, 
+  once, 
+  on,
+  tag, 
+  off,
+  emit,
+  notify,
+  context,
+  meta,
+  add,
   computed,
   __internal__for__debug__purpose__only__
 } from '../src/stedis'
-
 
 
 const {
@@ -59,6 +68,9 @@ test('vse', () => {
   expect(get('/a/2')).toEqual({ a: 2, foo: 'bar' })
   expect(get('/a')).toEqual([{ a: 1 }, { a: 2, foo: 'bar' }])
 
+  add(`/a`, {baz: 'fuzz'})
+  expect(get('/a')).toEqual([{ a: 1 }, { a: 2, foo: 'bar' }, { baz: 'fuzz' }])
+
 })
 
 
@@ -89,7 +101,7 @@ const handleChange = jest.fn()
 
 test('events: basic', () => {
   let shouldHaveBeenCalled = 0
-  const off = on('/a/1', handleChange)
+  const off1 = on('/a/1', handleChange)
 
   set('/a/1', { a: 1 })
   expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
@@ -98,7 +110,7 @@ test('events: basic', () => {
   expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
 
 
-  off()
+  off1()
   set('/a/1', { a: 1 })
   expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
 
@@ -111,6 +123,46 @@ test('events: basic', () => {
 
   set('/a/1', { a: 1 })
   set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+
+  on('/a/1', 'update', handleChange)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+  off(`/a/1`)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+
+  once('/a/1', 'update', handleChange)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+
+  once('/a/1', 'custom', handleChange)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+  emit('/a/1', 'custom')
+  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+  set('/a/1', { a: 1 })
+  emit('/a/1', 'custom')
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+
+
+  once('/a/1', 'custom', handleChange)
+  emit('/a/1/b/2/c/3', 'custom')
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+  emit('/a/1', 'custom')
+  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+
+  
+  once('/a/1', 'custom', handleChange)
+  emit('/a/1/b/2/c/3', 'custom')
+  emit('/a/1/b/2/c/3', 'custom', 1)
+  emit('/a/1/b/2/c/3', 'custom', 2)
+  notify('/a/1/b/2/c/3', 'custom', 3)
+  notify('/a/1/b/2/c/3', 'custom',  4)
+  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+  emit('/a/1', 'custom')
   expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
 
 })
@@ -168,6 +220,93 @@ test('tagged', () => {
   set('/tasks/2', {id: 2, user: 'notme'})
 
   expect(get('/tasks#my')).toEqual([{ id: 1, user: 'me' }])
+})
+
+
+test('meta', () => {
+  meta(`/a/1`, {isLoading: true})
+  expect(meta('/a/1')).toEqual({ isLoading: true })
+  meta(`/a/1`, null)
+  expect(meta('/a/1')).toEqual( null )
+
+  meta(`/a/1/2/3/4`, {isLoading: true})
+  expect(meta('/a/1/2/3/4')).toEqual({ isLoading: true })
+  meta(`/a/1/2/3/4`, null)
+  expect(meta('/a/1/2/3/4')).toEqual( null )
+})
+
+
+test('context', () => {
+  const { get, set, merge, add, on, off, once, emit, notify } = context('/ctx/new')
+  set(`/user/1`, {user: 1})
+  expect(get('/user/1')).toEqual({ user: 1 })
+  expect(get('/a/100')).toEqual(undefined)
+  expect(get('/a/100/b/200')).toEqual(undefined)
+  set('/a/1', { a: 1 })
+  expect(get('/a/1')).toEqual({ a: 1 })
+  set('/a/1/b/2', { b: 2 })
+  expect(get('/a/1/b/2')).toEqual({ b: 2 })
+  expect(get('/a')).toEqual([{ a: 1 }])
+  expect(get('/a/1/b')).toEqual([{ b: 2 }])
+  set(`/a/2`, { a: 2 })
+  expect(get('/a/2')).toEqual({ a: 2 })
+  expect(get('/a')).toEqual([{ a: 1 }, { a: 2 }])
+  merge('/a/2', { foo: 'bar' })
+  expect(get('/a/2')).toEqual({ a: 2, foo: 'bar' })
+  expect(get('/a')).toEqual([{ a: 1 }, { a: 2, foo: 'bar' }])
+  add(`/a`, { baz: 'fuzz' })
+  expect(get('/a')).toEqual([{ a: 1 }, { a: 2, foo: 'bar' }, { baz: 'fuzz' }])
+  let shouldHaveBeenCalled = 0
+  const handleChange = jest.fn()
+  on('/a/1', handleChange)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+  off(`/a/1`)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+  once('/a/1', handleChange)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+  set('/a/1', { a: 1 })
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+  on('/a/1', 'update', handleChange)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+  off(`/a/1`)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+  once('/a/1', 'update', handleChange)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+  once('/a/1', 'custom', handleChange)
+  set('/a/1', { a: 1 })
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+  emit('/a/1', 'custom')
+  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+  set('/a/1', { a: 1 })
+  emit('/a/1', 'custom')
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+  once('/a/1', 'custom', handleChange)
+  emit('/a/1/b/2/c/3', 'custom')
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
+  emit('/a/1', 'custom')
+  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+  once('/a/1', 'custom', handleChange)
+  emit('/a/1/b/2/c/3', 'custom')
+  emit('/a/1/b/2/c/3', 'custom', 1)
+  emit('/a/1/b/2/c/3', 'custom', 2)
+  notify('/a/1/b/2/c/3', 'custom', 3)
+  notify('/a/1/b/2/c/3', 'custom', 4)
+  expect(handleChange).toHaveBeenCalledTimes(++shouldHaveBeenCalled)
+  emit('/a/1', 'custom')
+  expect(handleChange).toHaveBeenCalledTimes(shouldHaveBeenCalled)
 })
 
 
