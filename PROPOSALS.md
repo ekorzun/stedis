@@ -1,5 +1,23 @@
 # Stedis proposals
 
+## children event type
+
+## retag
+Reverse tag: Shortcut for tag / untag
+
+## Context builder API
+```typescript
+context(`/tasks`)
+  .tag({
+    inbox: t => !t.board,
+    progress: t => t.board === 'progress',
+    done: t => t.board === 'done',
+    my: t => t.user === 1
+  })
+  .set(`/1`, { id: 1, title: 'new', user: 2 })
+  .on(`/*`, e => {})
+```
+
 ## Schemas (Plugin?)
 -
 ```typescript
