@@ -7,8 +7,12 @@ export const useGetValue = uri => {
 
   useEffect(() => {
     watcher.current && watcher.current()
-    setValue(p => ++p)
-    watcher.current = on(uri, 'change', setValue)
+
+      watcher.current = on(uri, () => {
+        setValue(p => {
+          return ++p
+        })
+      })
   }, [uri])
 
   useEffect(() => {
